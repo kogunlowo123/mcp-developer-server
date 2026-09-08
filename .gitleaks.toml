@@ -37,24 +37,31 @@ description = "Repository-wide allowlist"
 
 paths = [
   # Regression fixtures deliberately contain credential-shaped strings so the
-  # redaction and detection controls have something real to act on.
-  '''tests/security/test_boundaries\.py''',
-  '''tests/unit/test_security_.*\.py''',
+  # redaction and detection controls have something real to act on. Every one
+  # of them is built by concatenation in tests/conftest.py — "AKIA" +
+  # "IOSFODNN7EXAMPLE" — so nothing here was ever a valid credential, and a
+  # reader can see that at a glance.
+  '''tests/conftest\.py''',
+  '''tests/security/.*\.py''',
+  '''tests/unit/test_security_controls\.py''',
+  # The examples demonstrate the redaction and injection controls, which needs
+  # something for them to act on.
+  '''examples/.*\.py''',
+  # The smoke test writes a throwaway workspace containing a fake key so the
+  # container can be checked to redact it.
+  '''scripts/smoke-test\.sh''',
 ]
 
 regexes = [
   # Documented placeholders in .env.example and the configuration reference.
   '''REPLACE_ME[A-Z_]*''',
-  # Compose-only credentials for a database that exists solely on a developer
-  # machine and is never reachable from outside it.
-  '''rag-local-password''',
-  '''local-development-key''',
-  # Test and smoke-test keys, named so their nature is unmistakable.
+  # Test keys, named so their nature is unmistakable.
   '''[a-z-]*-key-not-a-real-secret''',
-  # Example credential shapes quoted in security documentation and in the
-  # redaction test suite, so that the controls can be described and asserted.
+  # AWS's own documented example key, quoted in the threat model and used as a
+  # fixture. It has never been valid and appears in AWS's public documentation.
   '''AKIAIOSFODNN7EXAMPLE''',
-  '''sk-abcdefghijklmnopqrstuvwxyz0123''',
-  '''ghp_abcdefghijklmnopqrstuvwxyz012345''',
-  '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxIn0\.abcdefghijkl''',
+  # A run of a single repeated character is a fixture, not a credential: the
+  # redaction tests need a token of the right shape and length.
+  '''gh[pousr]_a{36,}''',
+  '''ghp_a+''',
 ]

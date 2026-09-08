@@ -85,6 +85,22 @@ class TestSecretsDoNotLeave:
         result = await invoke(server, "read_file", {"path": "README.md"})
         assert result["structuredContent"]["redaction"]["applied"] is False
 
+    async def test_no_part_of_a_result_carries_a_credential(self, server: Server):
+        # The whole envelope, not one member of it. An earlier version redacted
+        # the prose and not the structured half; the version after that redacted
+        # both and then attached a scanner excerpt taken from the raw content.
+        result = await invoke(server, "read_file", {"path": "src/demo/settings.py"})
+        rendered = json.dumps(result)
+        assert FAKE_AWS_KEY not in rendered
+        assert FAKE_GITHUB_TOKEN not in rendered
+        assert "hunter2" not in rendered
+
+    async def test_a_search_result_carries_no_credential_in_either_half(self, server: Server):
+        result = await invoke(server, "search_code", {"pattern": "TOKEN"})
+        rendered = json.dumps(result)
+        assert FAKE_GITHUB_TOKEN not in rendered
+        assert FAKE_AWS_KEY not in rendered
+
 
 class TestUntrustedContentIsMarkedNotRewritten:
     async def test_an_injected_instruction_is_returned_exactly_as_it_is_on_disk(

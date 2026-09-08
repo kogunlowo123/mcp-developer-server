@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
+import subprocess  # nosec B404 - the module docstring above states every constraint on its use
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
@@ -177,7 +177,12 @@ def _run_git(context: ToolContext, arguments: Sequence[str]) -> str:
     timeout = max(1.0, context.remaining_seconds())
 
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell, scrubbed env
+        # The argument vector is built entirely in this module: a literal
+        # executable name, literal options, an allowlisted subcommand, and
+        # values that have passed `_validate_revision` or workspace resolution.
+        # shell=False, and no caller text is ever concatenated into a string a
+        # shell parses. THREAT-MODEL.md T6 has the full argument.
+        completed = subprocess.run(  # noqa: S603  # nosec B603
             command,
             cwd=root,
             env=_git_environment(root),

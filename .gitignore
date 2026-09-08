@@ -51,3 +51,9 @@ Thumbs.db
 # Build artifacts
 *.sarif
 sbom.json
+
+# Generated documentation site.
+_site/
+
+# Conformance and coverage reports written by the gates.
+reports/

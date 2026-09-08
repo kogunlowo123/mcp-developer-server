@@ -96,61 +96,59 @@ class ToolResult:
     untrusted_label: str = "file-content"
 
     def render(self, context: ToolContext) -> dict[str, Any]:
-        """Build the ``CallToolResult`` members for a successful call."""
+        """Build the ``CallToolResult`` members for a successful call.
+
+        The order below is the whole of the correctness here, and it was wrong
+        once: everything is *assembled* first, and redaction runs over the
+        finished structure last. Redacting an input and then attaching something
+        derived from the un-redacted original — a scanner excerpt, say — leaves a
+        credential in the result even though the pass "ran". A single pass over
+        the assembled object closes that for anything added here in future, not
+        only for what is added today.
+
+        The one thing deliberately outside that pass is the *scan*, which runs
+        against the content exactly as it is on disk. Scanning redacted text
+        would miss an injected instruction that happened to sit beside a
+        credential.
+        """
         blocks: list[dict[str, Any]] = []
+        structured: dict[str, Any] = dict(self.structured)
 
-        summary = self.text
-        redacted_summary = context.redactor.apply(summary)
-        if redacted_summary.redacted:
-            summary = redacted_summary.text
-
-        if summary:
-            blocks.append({"type": spec.CONTENT_TEXT, "text": summary})
-
-        assessment: Assessment | None = None
-        redaction_count = redacted_summary.count
-        redaction_rules = set(redacted_summary.rules)
-
-        # The structured half carries file content too — a search match's
-        # `text`, a symbol's `signature` — and a control applied only to the
-        # prose would let a credential leave through the machine-readable
-        # member instead. Both halves go through the same redactor.
-        structured, structured_redaction = _redact_structure(dict(self.structured), context)
-        redaction_count += structured_redaction[0]
-        redaction_rules.update(structured_redaction[1])
+        if self.text:
+            blocks.append({"type": spec.CONTENT_TEXT, "text": self.text})
 
         if self.untrusted:
-            # Order matters. Scan the content as it exists on disk, then redact,
-            # then fence. Scanning after redaction would miss an injected
-            # instruction that happened to sit next to a credential; redacting
-            # after fencing would risk rewriting the fence itself.
-            assessment = context.scanner.scan(self.untrusted)
-            redacted_body = context.redactor.apply(self.untrusted)
-            redaction_count += redacted_body.count
-            redaction_rules.update(redacted_body.rules)
+            assessment: Assessment = context.scanner.scan(self.untrusted)
+            structured["untrusted_content"] = True
+            structured["content_assessment"] = assessment.as_dict()
             blocks.append(
                 {
                     "type": spec.CONTENT_TEXT,
                     "text": fence(
-                        redacted_body.text,
+                        self.untrusted,
                         nonce=context.nonce,
                         label=self.untrusted_label,
                     ),
                 }
             )
-            structured["untrusted_content"] = True
-            structured["content_assessment"] = assessment.as_dict()
 
-        structured["redaction"] = {
-            "applied": redaction_count > 0,
-            "count": redaction_count,
-            "rules": sorted(redaction_rules),
+        redacted_blocks, block_redaction = _redact_structure(blocks, context)
+        redacted_structured, structured_redaction = _redact_structure(structured, context)
+
+        count = block_redaction[0] + structured_redaction[0]
+        rules = block_redaction[1] | structured_redaction[1]
+
+        # Attached after the pass, and safe to be: it names rules, never values.
+        redacted_structured["redaction"] = {
+            "applied": count > 0,
+            "count": count,
+            "rules": sorted(rules),
         }
 
         return {
             "resultType": spec.RESULT_COMPLETE,
-            "content": blocks,
-            "structuredContent": structured,
+            "content": redacted_blocks,
+            "structuredContent": redacted_structured,
             "isError": False,
         }
 

@@ -1,7 +1,11 @@
 # syntax=docker/dockerfile:1.9
 # Multi-stage build: dependencies are resolved from the lockfile in a builder
 # stage, and only the virtual environment plus application source are copied
-# into a slim runtime image that executes as a non-root user.
+# into a slim runtime image that runs as a non-root user.
+#
+# The image serves the HTTP transport. The stdio transport is what an editor
+# uses, and an editor spawns a process rather than a container, so packaging
+# stdio in an image would be packaging a shape nobody runs.
 
 ARG PYTHON_VERSION=3.12
 ARG UV_VERSION=0.10.10
@@ -47,21 +51,41 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends curl; \
+    apt-get install -y --no-install-recommends curl git; \
     rm -rf /var/lib/apt/lists/*; \
     groupadd --system --gid 10001 app; \
     useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app; \
-    install -d -o app -g app /app /app/var
+    install -d -o app -g app /app /app/var /workspace
 
 COPY --from=builder --chown=app:app /opt/venv /opt/venv
-COPY --from=builder --chown=app:app /build/src /app/src
+
+# The workspace is a mount point, not baked content. `docker run -v $PWD:/workspace`
+# is the whole configuration a caller needs; without the default below they would
+# have to set MCP_SANDBOX__WORKSPACE as well, and a server pointed at an empty
+# WORKDIR starts happily and answers every question with "nothing here".
+ENV MCP_SANDBOX__WORKSPACE=/workspace
+
+# 0.0.0.0, not the 127.0.0.1 default: a process bound to loopback inside a
+# container is unreachable from the published port, so the image would start
+# cleanly and refuse every connection. What controls exposure here is whether
+# the port is published, not the bind address.
+ENV MCP_HTTP__HOST=0.0.0.0 \
+    MCP_HTTP__PORT=8080
 
 WORKDIR /app
 USER app
 
-EXPOSE 8000
+LABEL org.opencontainers.image.title="mcp-developer-server" \
+      org.opencontainers.image.description="A sandboxed Model Context Protocol server for source code: read-only tools in a contained workspace, secrets redacted, results marked untrusted." \
+      org.opencontainers.image.source="https://github.com/kogunlowo123/mcp-developer-server" \
+      org.opencontainers.image.licenses="MIT"
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8000/healthz || exit 1
+EXPOSE 8080
 
-ENTRYPOINT ["python", "-m"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
+
+# A subcommand is required, so the entry point names one. `docker run <image>
+# doctor` still works: the argument replaces the CMD, not the ENTRYPOINT.
+ENTRYPOINT ["mcp-devserver"]
+CMD ["serve", "--transport", "http"]

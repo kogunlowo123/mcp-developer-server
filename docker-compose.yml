@@ -1,0 +1,46 @@
+# A local HTTP deployment. `docker compose up --build -d`, then
+# `curl -s localhost:8080/readyz`.
+#
+# The stdio transport is not here on purpose: an editor spawns a process, not a
+# container, so packaging stdio in compose would be packaging a shape nobody
+# runs. For an editor, see the configuration snippet in README.md.
+
+services:
+  devserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-devserver:local
+    ports:
+      # Loopback only. The container binds 0.0.0.0 internally because a
+      # loopback bind inside a container is unreachable from a published port;
+      # what limits exposure is this mapping, not the bind address.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # The repository being served, read-only. Read-only is belt and braces —
+      # no tool opens a file for writing — but it means the guarantee survives a
+      # future change that forgets.
+      - "${MCP_WORKSPACE:-.}:/workspace:ro"
+    environment:
+      MCP_ENVIRONMENT: local
+      MCP_SANDBOX__WORKSPACE: /workspace
+      MCP_HTTP__HOST: 0.0.0.0
+      MCP_HTTP__PORT: "8080"
+      # Empty here, which the server warns about on start-up. A real deployment
+      # supplies one from a secret store; production refuses to start without.
+      MCP_HTTP__BEARER_TOKEN: "${MCP_HTTP__BEARER_TOKEN:-}"
+      MCP_OBSERVABILITY__LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

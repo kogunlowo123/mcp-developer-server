@@ -19,7 +19,7 @@ jobs:
     name: Build, scan and smoke test image
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,4 +52,8 @@ jobs:
           test "${uid}" != "0"
 
       - name: Smoke test
+        # Starts the image against a real workspace, runs the protocol
+        # conformance suite inside it, and asserts the sandbox, redaction and
+        # untrusted-content controls over HTTP. An image that starts and answers
+        # wrongly fails here rather than in somebody's editor.
         run: bash scripts/smoke-test.sh ${{ github.event.repository.name }}:ci

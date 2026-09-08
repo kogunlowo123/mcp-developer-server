@@ -23,7 +23,7 @@ jobs:
     name: Lint, format and type check
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -36,7 +36,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
-        run: uv sync --locked --all-extras --dev
+        run: uv sync --locked --all-extras --dev --group docs
 
       - name: Ruff lint
         run: uv run ruff check --output-format=github .
@@ -47,15 +47,24 @@ jobs:
       - name: Mypy
         run: uv run mypy .
 
+      - name: Documentation site
+        # Built here as well as in the Pages workflow so a change that renames
+        # or deletes a documented file fails the pull request rather than the
+        # deployment. The builder fails on a broken internal link.
+        run: uv run python scripts/build_site.py --output _site
+
   test:
     name: Tests (${{ matrix.suite }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        suite: [unit, integration, security]
+        # These are exactly the markers declared in pyproject.toml. A name that
+        # is not a marker collects nothing and exits 5, which reads as a failure
+        # for the wrong reason; a marker missing from this list runs nowhere.
+        suite: [unit, integration, security, e2e, conformance]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -86,7 +95,7 @@ jobs:
     name: Coverage threshold
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -102,13 +111,91 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Full suite with coverage gate
-        run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=80
+        run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=88
+
+  conformance:
+    name: Protocol conformance gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --dev
+
+      - name: Conform in-process
+        # --strict, not the default: this server has no reason to violate a
+        # SHOULD, so a new violation is a regression here even though it would
+        # not be non-conformance in general. The command exits non-zero on a
+        # failure, which is what makes this a gate rather than a report.
+        run: >-
+          uv run mcp-devserver conform --strict
+          --report reports/conformance-in-process.json
+        env:
+          MCP_SANDBOX__WORKSPACE: ${{ github.workspace }}
+
+      - name: Conform over a real stdio process
+        # The transport an editor uses. This also proves the server writes
+        # nothing but responses to stdout, which the in-process run cannot.
+        run: >-
+          uv run mcp-devserver conform --strict
+          --stdio "uv run mcp-devserver serve --transport stdio"
+          --report reports/conformance-stdio.json
+        env:
+          MCP_SANDBOX__WORKSPACE: ${{ github.workspace }}
+          MCP_OBSERVABILITY__LOG_LEVEL: error
+
+      - name: Upload the conformance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  examples:
+    name: Examples
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --locked --all-extras --dev
+
+      - name: Run every example
+        # Examples are documentation that executes. One that stops working is a
+        # README that lies, so they run on every push rather than being trusted.
+        run: |
+          for example in examples/*.py; do
+            echo "--- $example"
+            uv run python "$example"
+          done
 
   build:
     name: Build distribution
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7

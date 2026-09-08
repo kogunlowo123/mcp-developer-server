@@ -176,11 +176,9 @@ class Denylist:
         """
         parts = [part.lower() for part in relative.parts]
 
-        for index, part in enumerate(parts):
-            if part in DENIED_DIRECTORIES and index < len(parts) - 1:
-                return f"{part!r} is a directory this server never reads from"
-            # A denied directory named as the target itself is refused too;
-            # listing `.git` is not more acceptable than reading inside it.
+        # Any component, at any depth, including the last: naming `.git` as the
+        # target is not more acceptable than reading something inside it.
+        for part in parts:
             if part in DENIED_DIRECTORIES:
                 return f"{part!r} is a directory this server never reads from"
 

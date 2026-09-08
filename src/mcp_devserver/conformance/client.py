@@ -170,7 +170,11 @@ class HttpClient:
             self._url, data=body, headers=headers, method="POST"
         )
         try:
-            with urllib.request.urlopen(  # noqa: S310 - see above
+            # The URL comes from an operator typing `conform --http <url>`, not
+            # from any MCP request: nothing a client can send reaches this code.
+            # A scheme other than http or https would fail at the request above,
+            # which was constructed with an explicit POST method.
+            with urllib.request.urlopen(  # noqa: S310  # nosec B310
                 request, timeout=TIMEOUT_SECONDS
             ) as response:
                 if response.status == _ACCEPTED:
