@@ -57,3 +57,6 @@ _site/
 
 # Conformance and coverage reports written by the gates.
 reports/
+
+# Written by `python tasks.py security`: an output of a run, not an input.
+requirements.audit.txt
