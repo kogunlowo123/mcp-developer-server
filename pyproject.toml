@@ -1,0 +1,201 @@
+[project]
+name = "mcp-devserver"
+version = "0.1.0"
+description = "A sandboxed Model Context Protocol server for source code: read-only developer tools inside a contained workspace, secrets redacted on the way out, and results marked as untrusted content."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Kehinde Ogunlowo" }]
+keywords = ["mcp", "model-context-protocol", "llm-tools", "sandbox", "prompt-injection", "static-analysis"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Security",
+]
+
+# Deliberately small. The protocol layer is written against the specification
+# rather than an SDK, because the specification's conformance requirements are
+# the thing this project is demonstrating; an SDK would own exactly the code the
+# tests need to exercise. See ARCHITECTURE.md, ADR-001.
+dependencies = [
+  "starlette>=1.3.1,<2",
+  "uvicorn[standard]>=0.40,<0.41",
+  "pydantic>=2.12,<3",
+  "pydantic-settings>=2.13,<3",
+  "structlog>=25.5,<26",
+]
+
+[project.optional-dependencies]
+# OpenTelemetry traces and metrics for the HTTP transport. Optional because a
+# stdio server launched by an editor should add no exporters it was not asked
+# for, and because the default install must stay small enough to audit.
+otel = [
+  "opentelemetry-api>=1.39,<2",
+  "opentelemetry-sdk>=1.39,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.39,<2",
+]
+
+[project.scripts]
+mcp-devserver = "mcp_devserver.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/kogunlowo123/mcp-developer-server"
+Source = "https://github.com/kogunlowo123/mcp-developer-server"
+Issues = "https://github.com/kogunlowo123/mcp-developer-server/issues"
+Documentation = "https://kogunlowo123.github.io/mcp-developer-server/"
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.3,<10",
+  "pytest-asyncio>=1.3,<2",
+  "pytest-cov>=7.0,<8",
+  "ruff>=0.16.6,<0.17",
+  "mypy>=1.19,<2",
+  "bandit>=1.9,<2",
+  "httpx>=0.28,<0.29",
+  "asgi-lifespan>=2.1,<3",
+  "types-Pygments>=2.19,<3",
+]
+
+docs = [
+  "markdown-it-py>=4.0,<5",
+  "mdit-py-plugins>=0.5,<1",
+  "pygments>=2.19,<3",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_devserver"]
+
+# --------------------------------------------------------------------------
+# Lint and format
+# --------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "T20", "PT", "RET",
+  "SIM", "TID", "PTH", "ERA", "PL", "TRY", "RUF", "S", "ASYNC", "ANN", "D",
+]
+ignore = [
+  "D203",    # incompatible with D211
+  "D213",    # incompatible with D212
+  "ANN401",  # explicit Any is the correct type for JSON-RPC payloads
+  "TRY003",  # a long message at the raise site beats one exception class per message
+  "PLR0913", # constructor injection legitimately takes several collaborators
+  # Prose in docstrings uses en/em dashes and curly quotes. These rules exist to
+  # catch homoglyph confusion in identifiers, not typography in documentation.
+  "RUF001", "RUF002", "RUF003",
+  # OpenTelemetry imports are deferred so that a default install without the
+  # `otel` extra never imports them. Each site carries a comment.
+  "PLC0415",
+  # This project runs on asyncio, not trio; the rule's suggested replacements
+  # are not dependencies here.
+  "ASYNC240",
+  # Every class here documents construction in its class docstring, which is
+  # where a reader looks. A separate __init__ docstring would restate it, and a
+  # restated docstring is one that goes stale independently of the real one.
+  "D107",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  # S603: the fixtures start `git` to build a real repository. The executable is
+  # resolved with shutil.which and every argument is a literal in this file.
+  "S101", "S104", "S105", "S106", "S603",
+  "D100", "D101", "D102", "D103", "D104", "D105", "D107", "D401",
+  "PLR2004", "ANN201", "ANN001", "RUF012",
+]
+"src/mcp_devserver/cli.py" = ["T20"]
+"src/mcp_devserver/conformance/**" = ["T20"]
+# Each check's docstring states the requirement it tests, in the
+# specification's own normative voice ("a request without an id MUST NOT
+# receive a response"). Rewriting those into the imperative would restate
+# the requirement less exactly than the document they come from.
+"src/mcp_devserver/conformance/checks.py" = ["T20", "D401"]
+"tasks.py" = ["D", "T20", "ANN"]
+"tasks_local.py" = ["D", "ANN"]
+"scripts/**" = ["T20"]
+"examples/**" = ["T20", "D401"]
+# One HTTP handler that refuses eight different malformed requests before doing
+# any work. Each return is a distinct rejection with its own status code;
+# collapsing them into a single exit would hide which check fired.
+"src/mcp_devserver/transport/http.py" = ["PLR0911"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mcp_devserver"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+# --------------------------------------------------------------------------
+# Types
+# --------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests", "tasks.py"]
+strict = true
+warn_unreachable = true
+disallow_any_generics = true
+show_error_codes = true
+pretty = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
+
+# --------------------------------------------------------------------------
+# Tests
+# --------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "unit: pure logic, no I/O and no network",
+  "integration: component wiring against a real temporary workspace and transports",
+  "security: adversarial cases; a failure is a security regression",
+  "e2e: a real server process driven over a real transport",
+  "conformance: the protocol conformance suite; a failure means the server is off-spec",
+]
+filterwarnings = ["error", "ignore::DeprecationWarning:httpx.*"]
+
+[tool.coverage.run]
+source = ["src/mcp_devserver"]
+branch = true
+omit = ["src/mcp_devserver/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = [
+  'if TYPE_CHECKING:',
+  'raise NotImplementedError',
+  '@(abc\.)?abstractmethod',
+  'class .*\(Protocol\):',
+  '^\s*\.\.\.$',
+]
+
+# --------------------------------------------------------------------------
+# Security static analysis
+# --------------------------------------------------------------------------
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
