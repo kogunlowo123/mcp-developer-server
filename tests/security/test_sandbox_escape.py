@@ -111,15 +111,30 @@ class TestSymlinkEscape:
     async def test_a_symlinked_directory_is_not_walked(
         self, server: Server, workspace_root: Path, tmp_path: Path
     ):
+        # A marker that appears nowhere else. An earlier version of this test
+        # searched for a string the fixture workspace already contained, so it
+        # matched its own decoy and reported an escape that had not happened.
+        marker = "only-reachable-through-the-link"
         target = tmp_path / "elsewhere"
         target.mkdir(exist_ok=True)
-        (target / "secret.py").write_text("PASSWORD = 'hunter2'\n", encoding="utf-8")
+        (target / "secret.py").write_text(f'PASSWORD = "{marker}"\n', encoding="utf-8")
         try:
             (workspace_root / "linked").symlink_to(target, target_is_directory=True)
         except (OSError, NotImplementedError):
             pytest.skip("this platform does not allow creating symbolic links")
-        result = await invoke(server, "search_code", {"pattern": "hunter2"})
+
+        result = await invoke(server, "search_code", {"pattern": marker})
         assert result["structuredContent"]["match_count"] == 0
+        # Not the whole envelope: a search echoes the caller's own pattern back
+        # in the summary and in structuredContent, which is not a leak.
+        assert result["structuredContent"]["matches"] == []
+        assert "secret.py" not in json.dumps(result)
+
+        # And the directory is not offered as somewhere to look, either.
+        listing = await invoke(server, "list_directory", {})
+        names = {entry["name"] for entry in listing["structuredContent"]["entries"]}
+        assert "linked" not in names
+        assert listing["structuredContent"]["symlinks_skipped"] >= 1
 
     async def test_a_symlink_created_after_a_listing_is_still_not_followed(
         self, server: Server, workspace_root: Path, outside_secret: Path
