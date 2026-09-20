@@ -295,3 +295,60 @@ useful than one that says where the edges are.
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- project-structure -->
+## Project structure
+
+```text
+├── .github/
+├── docs/
+│   ├── configuration.md
+│   ├── conformance.md
+│   ├── operations.md
+│   ├── protocol.md
+│   └── tools.md
+├── examples/
+│   ├── quickstart.py
+│   ├── sandbox_demo.py
+│   └── untrusted_demo.py
+├── scripts/
+│   ├── build_site.py
+│   └── smoke-test.sh
+├── security/
+│   ├── audit-exceptions.md
+│   └── audit-ignores.txt
+├── src/
+│   └── mcp_devserver/
+├── tests/
+│   ├── conformance/
+│   ├── e2e/
+│   ├── integration/
+│   ├── security/
+│   ├── unit/
+│   ├── __init__.py
+│   └── conftest.py
+├── .dockerignore
+├── .env.example
+├── .gitattributes
+├── .gitignore
+├── .gitleaks.toml
+├── ARCHITECTURE.md
+├── CHANGELOG.md
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── Dockerfile
+├── LICENSE
+├── Makefile
+├── README.md
+├── SECURITY.md
+├── THREAT-MODEL.md
+├── docker-compose.yml
+├── pyproject.toml
+├── tasks.py
+… (truncated)
+```
+
+<!-- architecture -->
+## Architecture
+
+![Architecture diagram](docs/architecture.svg)
