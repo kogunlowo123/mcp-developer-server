@@ -1,5 +1,7 @@
 # MCP Developer Server
 
+**Built by [Citadel Cloud Management](https://www.linkedin.com/company/citadel-cloud-management/)** — follow on LinkedIn for more engineering work like this.
+
 [![CI](https://github.com/kogunlowo123/mcp-developer-server/actions/workflows/ci.yml/badge.svg)](https://github.com/kogunlowo123/mcp-developer-server/actions/workflows/ci.yml)
 [![Security](https://github.com/kogunlowo123/mcp-developer-server/actions/workflows/security.yml/badge.svg)](https://github.com/kogunlowo123/mcp-developer-server/actions/workflows/security.yml)
 [![Container](https://github.com/kogunlowo123/mcp-developer-server/actions/workflows/docker.yml/badge.svg)](https://github.com/kogunlowo123/mcp-developer-server/actions/workflows/docker.yml)
